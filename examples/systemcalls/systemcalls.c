@@ -50,9 +50,11 @@ bool do_exec(int count, ...)
     va_start(args, count);
     char * command[count+1];
     int i;
+    printf("[DO_EXEC]: Start\n");
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
+        printf("[DO_EXEC]: command[%d] = %s\n", i, command[i]);
     }
     command[count] = NULL;
 
@@ -64,36 +66,66 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    fflush(stdout);
     switch (pid = fork()) {
     case -1:
         // fork failed
+        printf("[DO_EXEC]: fork failed\n");
         return_val = false;
         perror("fork");
         break;
     case 0:
         // kid
-        execv_return = execv(command[0], &command[1]);
-        return_val = execv_return != -1;
-        if (!return_val) {
-            perror(command[0]);
+        printf("[DO_EXEC][CHILD]: fork\n");
+        printf("[DO_EXEC][CHILD]: execv(%s", command[0]);
+        for(i=1; i<count; i++)
+        {
+            printf(", %s", command[i]);
         }
+        printf(")\n");
+        execv_return = execv(command[0], &command[1]);
+
+        return_val = execv_return != -1;
+        if (return_val) 
+        {
+            // exit(EXIT_SUCCESS);
+        }
+        else {
+            perror(command[0]);
+            // exit(EXIT_FAILURE);
+        }
+        fflush(stdout);
         break;
     
     default:
+        printf("[DO_EXEC][PARENT]: fork\n");
         // parent
         wait_pid = waitpid(pid, &wstatus, 0);
+        printf("[DO_EXEC][PARENT]: waitpid return: %d pid: %d wait_pid: %d\n", wstatus, pid, wait_pid);
 
         // use MACROS to make sure that the wait worked
         return_val = WIFEXITED(wstatus);
         if (!return_val) {
             perror("Child did not exit succesfully");
         }
-        else {
-            return_val &= wait_pid == pid;
+        else if (!(return_val &= wait_pid == pid)) {
+            printf("Wait waited(%d) for the wrong pid(%d)", wait_pid, pid);
         }
+        else if (!(return_val &= !(WIFSIGNALED(wstatus)))) {
+            perror("Child did not exit succesfully was terminated by a signal");
+        }
+        printf("[DO_EXEC][PARENT] Exit Status: %d\n", WEXITSTATUS(wstatus));
     }
 
     va_end(args);
+    printf("[DO_EXEC]: End %s ", return_val?"true":"false");
+    printf("execv(%s", command[0]);
+    for(i=1; i<count; i++)
+    {
+        printf(", %s", command[i]);
+    }
+    printf(")\n");
+    fflush(stdout);
 
     return return_val;
 }
